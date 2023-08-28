@@ -1,62 +1,161 @@
 ---
-title: "Week1 Assignment"
-author: "Your name"
-date: "2023-08-23"
-output: word_document
+title: "ECOL 592: Hypothesis and T-test"
+author: "George Woolsey"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 3
+linkcolor: blue
+header-includes:
+  - \usepackage{caption}
+  - \captionsetup[figure]{labelformat=empty}
+editor_options: 
+  chunk_output_type: console
+knit: (function(inputFile, encoding){ 
+    out_dir <- '/data';
+    rmarkdown::render(inputFile, encoding = encoding, output_file=file.path(dirname(inputFile), out_dir, 'ECOL592_Wk1_GWoolsey.pdf')) 
+  })
 ---
+
+```{r setup, include=F}
+# knit options
+knitr::opts_chunk$set(
+  echo = TRUE
+  , warning = FALSE
+  , message = FALSE
+  , fig.height = 5
+  , fig.width = 7
+  , eval = TRUE
+  , fig.align='center'
+)
+```
+
+# Instruction
 
 Please provide the following questions with a short (~ one paragraph) answer and submit the knitted document in Canvas. Don't forget to put your name as "author". Create an R project to make it easy for locating files.
 
-## Hypothesis development
+# Hypothesis development
 
 Please write a precise null and alternative hypothesizes for the experiments described below based on the evidence you might be able to provide (one-tailed/two-tailed):
 
-**Experiment 1:** We want to compare the student's heights between third grades and fifth grades in a school.
+## **Experiment 1:** 
 
-[answer here]
+We want to compare the student's heights between third grades and fifth grades in a school.
 
-**Experiment 2:** We want to test the effect of difference in air temperature on relative humidity.
+### Example two-tailed t-test
 
-[answer here]
+$H_0$: There is no difference in the mean student height between the third grade class and the fifth grade class.
+$H_A$: There is a difference in the mean student height between the third grade class and the fifth grade class.
 
-**Experiment 3:** We want to see if high soil nitrogen is associated with higher growth in a forest stand.
+\begin{align*}
+H_0 : \mu_{3^{rd}grade} = \mu_{5^{th}grade} \\
+H_A : \mu_{3^{rd}grade} \neq \mu_{5^{th}grade}
+\end{align*}
 
-[answer here]
+where $\mu$ is the mean student height
+
+### Example one-tailed t-test
+
+$H_0$: The mean student height in the third grade class is not less than the mean student height in the fifth grade class.
+$H_A$: The mean student height in the third grade class is less than the mean student height in the fifth grade class.
+
+\begin{align*}
+H_0 : \mu_{3^{rd}grade} \ge \mu_{5^{th}grade} \\
+H_A : \mu_{3^{rd}grade} < \mu_{5^{th}grade}
+\end{align*}
+
+where $\mu$ is the mean student height
+
+## **Experiment 2:** 
+
+We want to test the effect of difference in air temperature on relative humidity.
+
+### Example two-tailed t-test
+
+$H_0$: Air temperature has no effect on relative humidity.
+$H_A$: Air temperature has an effect on relative humidity.
+
+Let $y = \beta_0 + \beta_1 * x$ where $y$ is relative humidity and $x$ is air temperature
+
+\begin{align*}
+H_0 : \beta_1 = 0 \\
+H_A : \beta_1 \neq 0
+\end{align*}
+
+### Example one-tailed t-test
+
+$H_0$: Relative humidity does not increase as air temperature increases.
+$H_A$: Relative humidity increases as air temperature increases (i.e. air temperature and relative humidity are positively related).
+
+Let $y = \beta_0 + \beta_1 * x$ where $y$ is relative humidity and $x$ is air temperature
+
+\begin{align*}
+H_0 : \beta_1 \le 0 \\
+H_A : \beta_1 > 0
+\end{align*}
+
+## **Experiment 3:** 
+
+We want to see if high soil nitrogen is associated with higher growth in a forest stand.
+
+### Example one-tailed t-test
+
+$H_0$: Tree growth does not increase as soil nitrogen increases.
+$H_A$: Tree growth increases as soil nitrogen increases (i.e. tree growth and soil nitrogen are positively related).
+
+Let $y = \beta_0 + \beta_1 * x$ where $y$ is tree growth and $x$ is soil nitrogen.
+
+\begin{align*}
+H_0 : \beta_1 \le 0 \\
+H_A : \beta_1 > 0
+\end{align*}
 
 ## One sample T-test
 
 Please interpret the result of the three tests in one short paragraph.
 
-[answer here]
-
-```{r}
-t.test(iris$Sepal.Length, alternative="greater", mu=5.7)		#1 sample, mu>5.7
-t.test(iris$Sepal.Length, alternative="greater", mu=6)		#1 sample, mu>6
-t.test(iris$Sepal.Length, alternative="greater", mu=5)		#1 sample, mu>5
-
+```{r one-samp-ttest}
+#1 sample, mu>5.7
+t.test(iris$Sepal.Length, alternative="greater", mu=5.7)		
+#1 sample, mu>6
+t.test(iris$Sepal.Length, alternative="greater", mu=6)		
+#1 sample, mu>5
+t.test(iris$Sepal.Length, alternative="greater", mu=5)		
 ```
+
+$H_0$: The mean sepal length is not greater than $x$.
+$H_A$: The mean sepal length is greater than $x$.
+
+\begin{align*}
+H_0 : \mu_{sepal.length} \le x \\
+H_A : \mu_{sepal.length} > x
+\end{align*}
+
+where $x$ is the predicted value of mean sepal length.
+
+\textcolor{violet}{For each example we are comparing the mean sepal length ($\mu_{sepal.length} = 5.843$) based on a sample of data to a predicted value of the mean sepal length $x$ using one-sample. The statistical test used to assess the difference between these values is the one-sided Student's t-test. In the first example using a predicted value of $x = 5.7$, the resulting p-value of 0.018 means that, given the null hypothesis is true, there is a 1.8 percent chance of getting a sepal length as or more extreme than the sample result by random chance alone. At an $\alpha = 0.05$ level, we reject the null hypothesis that the mean sepal length is less than or equal to 5.7 based on the observed data. In the final example using a predicted value of $x = 5$, we also reject the null hypothesis that the mean sepal length is not greater than the predicted value. The second example using a predicted value of $x = 6$, the resulting p-value of 0.989 means that we fail to reject the null hypothesis that the mean sepal length is not greater than 6.}
 
 ## Two sample T-test
 
 Please interpret the result of the two following tests and state why the selection of one tailed method. (Download "Data.csv" from github repository and put it in the project folder for this test)
 
-[answer here]
-
-```{r}
-
-Classheight <- read.csv("Data.csv") #import data to R environment
-t.test(Classheight$ECOL592003, Classheight$ECOL592002, var.equal = TRUE, alternative="less")		#2 sample, ECOL592003<ECOL592002
-t.test(Classheight$ECOL592003, Classheight$ECOL592002, var.equal = TRUE, alternative="two.sided")	#2 sample, ECOL592003=ECOL592002
+```{r two-samp-ttest}
+#import data to R environment
+Classheight <- read.csv("data/Data.csv") 
+#2 sample, ECOL592003<ECOL592002
+t.test(Classheight$ECOL592003, Classheight$ECOL592002, var.equal = TRUE, alternative="less")		
+#2 sample, ECOL592003=ECOL592002
+t.test(Classheight$ECOL592003, Classheight$ECOL592002, var.equal = TRUE, alternative="two.sided")	
 ```
 
+\textcolor{violet}{For the set of tests above, we are using sample data from two different groups arranged in vectors for each sample group. For the first two-sample t-test, the null hypothesis is $H_0 : \mu_{height.class1} \ge \mu_{height.class2}$ and the alternative hypothesis is $H_A : \mu_{height.class1} < \mu_{height.class2}$. The resulting p-value of 0.032 means that we reject the null hypothesis and support the alternative hypothesis at an $\alpha = 0.05$ level. The second two-sample test uses the null hypothesis $H_0 : \mu_{height.class1} = \mu_{height.class2}$ and the alternative hypothesis is $H_A : \mu_{height.class1} \neq \mu_{height.class2}$. The resulting p-value of 0.063 means that we fail to reject the null hypothesis at an $\alpha = 0.05$ level.}
 
 ## Interpreting plots
 
 Please interpret the following plots in a short paragraph.
 
-[answer here]
-
-```{r}
+```{r plots-and-such}
 #help(t.test)
 hist(iris$Sepal.Length)
 hist(iris$Sepal.Width)
@@ -64,5 +163,6 @@ plot(density(iris$Sepal.Length), ylim=c(0,1), xlim=c(0,10))
 lines(density(iris$Sepal.Width), lty=2)
 abline(v=5.84)
 abline(v=3.057, lty=2)
-
 ```
+
+\textcolor{violet}{The data on sepal length is fairly uniformily distributed in the range beteween 5 and 7 with a minimum value near 4 and a maximum value near 8 units. The data on sepal width is normally distributed with values ranging between 2 and 4.5 units. On average, sepals have greater length than width with the mean length near 6 and a mean width near 3 units.}
