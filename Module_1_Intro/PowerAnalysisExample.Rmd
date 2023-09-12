@@ -1,0 +1,75 @@
+---
+title: "ECOL 592: Hypothesis and T-test"
+author: "George Woolsey"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 3
+linkcolor: blue
+header-includes:
+  - \usepackage{caption}
+  - \captionsetup[figure]{labelformat=empty}
+editor_options: 
+  chunk_output_type: console
+knit: (function(inputFile, encoding){ 
+    out_dir <- '/data';
+    rmarkdown::render(inputFile, encoding = encoding, output_file=file.path(dirname(inputFile), out_dir, 'ECOL592_Wk1_GWoolsey.pdf')) 
+  })
+---
+
+```{r setup, include=F}
+# knit options
+knitr::opts_chunk$set(
+  echo = TRUE
+  , warning = FALSE
+  , message = FALSE
+  , fig.height = 5
+  , fig.width = 7
+  , eval = TRUE
+  , fig.align='center'
+)
+```
+
+```{r, eval=T}
+# bread-and-butter
+library(tidyverse)
+library(lubridate)
+library(viridis)
+library(scales)
+library(latex2exp)
+# visualization
+library(cowplot)
+library(kableExtra)
+#set seed
+set.seed(10)
+```
+
+
+```{r}
+power.t.test(n = NULL, delta = 100-99, sd = 15, power = 0.8, sig.level = 0.05, type = "one.sample")
+power.t.test(n = NULL, delta = 100-99, sd = 10, power = 0.8, sig.level = 0.05, type = "one.sample")
+power.t.test(n = NULL, delta = 100-99, sd = 3, power = 0.8, sig.level = 0.05, type = "one.sample")
+
+rbind(
+rnorm(n = 1000, mean = 1, sd = 15) %>% 
+  as.data.frame() %>% 
+  dplyr::rename(x=1) %>% 
+  dplyr::mutate(sd = "15")
+, rnorm(n = 1000, mean = 1, sd = 10) %>% 
+  as.data.frame() %>% 
+  dplyr::rename(x=1) %>% 
+  dplyr::mutate(sd = "10")
+, rnorm(n = 1000, mean = 1, sd = 3) %>% 
+  as.data.frame() %>% 
+  dplyr::rename(x=1) %>% 
+  dplyr::mutate(sd = "3")
+, rnorm(n = 1000, mean = 1, sd = 30) %>% 
+  as.data.frame() %>% 
+  dplyr::rename(x=1) %>% 
+  dplyr::mutate(sd = "30")
+) %>% 
+  ggplot(mapping = aes(x=x, color = sd)) +
+  geom_density()
+```
+

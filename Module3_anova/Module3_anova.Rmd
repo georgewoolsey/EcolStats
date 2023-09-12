@@ -1,0 +1,116 @@
+---
+title: "ECOL 592: ANOVA and Regression"
+author: "George Woolsey"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 3
+linkcolor: blue
+header-includes:
+  - \usepackage{caption}
+  - \captionsetup[figure]{labelformat=empty}
+editor_options: 
+  chunk_output_type: console
+knit: (function(inputFile, encoding){ 
+    out_dir <- '/data';
+    rmarkdown::render(inputFile, encoding = encoding, output_file=file.path(dirname(inputFile), out_dir, 'ECOL592_Wk3_GWoolsey.pdf')) 
+  })
+---
+
+```{r setup, include=F}
+# knit options
+knitr::opts_chunk$set(
+  echo = TRUE
+  , warning = FALSE
+  , message = FALSE
+  , fig.height = 5
+  , fig.width = 7
+  , eval = TRUE
+  , fig.align='center'
+)
+# load libraries
+# bread-and-butter
+library(tidyverse)
+library(lubridate)
+library(viridis)
+library(scales)
+library(latex2exp)
+# visualization
+library(cowplot)
+library(kableExtra)
+```
+
+# ANOVA
+
+Interpret the result of ANOVA and tell how much of the variability in corn yield is explained by variety? Use below formula to compute R-square. Interpret the Levenes test.
+
+$$R^2 =1-\frac{Residuals  Sum Sq}{Variety Sum Sq + Residuals Sum Sq}$$
+
+
+```{r}
+Corn <- read.csv("data/CornYield.csv", quote = "'") %>% 
+  dplyr::mutate(Variety = factor(Variety))
+boxplot(Yield~Variety,data=Corn, xlab = "Varieties", ylab = "Yield", main = "Histogram of Corn yield")
+lm_yld_vrty <- lm(Yield~Variety, data = Corn)
+anova(lm_yld_vrty)
+library(car)
+levene_test <- car::leveneTest(Yield~Variety, data = Corn)
+levene_test
+# values for answer
+r_sq <- summary(lm_yld_vrty)$r.squared %>% scales::percent(accuracy = 0.1)
+p_val <- levene_test$`Pr(>F)`[1]
+```
+
+## Response
+
+\textcolor{violet}{The results of the linear model of corn yield on corn variety indicate that there are statistically significant differences between at least two varieties in yield. The $R^2$ of the model is `r r_sq`, which means that corn variety explains `r r_sq` of the variation in corn yield. In Levene's test the null hyphothesis is that there is homogeneity of variance across the groups; a p-value of `r p_val` means that we fail to reject the null hypothesis that the variance is homogenous across groups.}
+
+# Mean comparisons
+
+According to mean Comparisons, which variety(s) has the statistically significant highest yield?
+
+```{r}
+# we can compare the means with a linear model using variety represented as a factor
+summary(lm_yld_vrty)
+coeffs <- summary(lm_yld_vrty)$coefficients
+xxx %>% str()
+# plot
+coeffs %>% dplyr::as_tibble() %>% str() %>% dplyr::mutate(var = variety)
+
+```
+
+
+```{r, include=TRUE,eval=FALSE}
+library(emmeans)
+Comparison <- emmeans(Analysis, ~ Variety)
+pairs(Comparison, adjust = "tukey")
+plot(pairs(Comparison,adjust = "tukey"), horizontal=F)
+```
+
+## Response
+
+\textcolor{violet}{For each example we are comparing the mean sepal len}
+
+# Regression
+
+Interpret the regression results.What does the number 11.4593 mean in the results table (in front of Height)? What does R-square mean? Interpret Breusch-Pagan test (Uncomment "lmtest" installation if you don't have the package).
+
+```{r}
+Trees <- read.csv("/data/Trees.csv", quote = "'")
+attach(Trees)
+reg_model <- lm(Age ~ Height, data = Trees)
+summary(reg_model)
+plot(Age ~ Height, data = Trees)
+abline(reg_model, col = "red")
+detach(Trees)
+#install.packages("lmtest")
+library(lmtest)
+heteroskedasticity_test <- bptest(reg_model)
+heteroskedasticity_test
+```
+
+## Response
+
+\textcolor{violet}{For each example we are comparing the mean sepal len}
+
