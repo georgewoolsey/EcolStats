@@ -64,7 +64,7 @@ p_val <- levene_test$`Pr(>F)`[1]
 
 ## Response
 
-\textcolor{violet}{The results of the linear model of corn yield on corn variety indicate that there are statistically significant differences between at least two varieties in yield. The $R^2$ of the model is `r r_sq`, which means that corn variety explains `r r_sq` of the variation in corn yield. In Levene's test the null hyphothesis is that there is homogeneity of variance across the groups; a p-value of `r p_val` means that we fail to reject the null hypothesis that the variance is homogenous across groups.}
+The results of the linear model of corn yield on corn variety indicate that there are statistically significant differences between at least two varieties in yield. The $R^2$ of the model is `r r_sq`, which means that corn variety explains `r r_sq` of the variation in corn yield. In Levene's test the null hypothesis is that there is homogeneity of variance across the groups; a p-value of `r p_val` means that we fail to reject the null hypothesis that the variance is homogeneous across groups.
 
 # Mean comparisons
 
@@ -73,31 +73,59 @@ According to mean Comparisons, which variety(s) has the statistically significan
 ```{r}
 # we can compare the means with a linear model using variety represented as a factor
 summary(lm_yld_vrty)
-coeffs <- summary(lm_yld_vrty)$coefficients
-xxx %>% str()
+# get lm estimates in df
+intercept <- summary(lm_yld_vrty)$coefficients[1]
+x_nm <- summary(lm_yld_vrty)$coefficients %>% row.names() %>% stringr::str_remove("Variety")
+vars <- Corn$Variety %>% unique() %>% as.character()
+df_estimates <- summary(lm_yld_vrty)$coefficients %>% 
+  dplyr::as_tibble() %>% 
+  dplyr::mutate(
+    x = x_nm
+    , mean_est = ifelse(x == "(Intercept)", Estimate, intercept + Estimate)
+    , Variety = ifelse(x == "(Intercept)", vars[!vars %in% x_nm], x) %>% as.factor()
+  )
 # plot
-coeffs %>% dplyr::as_tibble() %>% str() %>% dplyr::mutate(var = variety)
-
-```
-
-
-```{r, include=TRUE,eval=FALSE}
-library(emmeans)
-Comparison <- emmeans(Analysis, ~ Variety)
-pairs(Comparison, adjust = "tukey")
-plot(pairs(Comparison,adjust = "tukey"), horizontal=F)
+ggplot(data = df_estimates, mapping = aes(x = Variety, y = mean_est, fill = Variety)) +
+  geom_col(alpha = 0.6, width = 0.6) +
+  geom_point(
+    data = Corn
+    , mapping = aes(x=Variety, y=Yield, fill = Variety)
+    , shape = 21
+    , size = 3
+    , alpha = 1
+  ) +
+  geom_text(mapping = aes(label=scales::comma(mean_est,accuracy=0.1), fontface="bold"), vjust = 0, size = 8) +
+  scale_fill_viridis_d(option="cividis") +
+  labs(x = "Variety", y = "Yield", subtitle = "Mean of Yield by Variety") +
+  theme_bw() +
+  theme(legend.position = "none")
+# we can double check these estimates
+Corn %>% 
+  dplyr::group_by(Variety) %>% 
+  dplyr::summarise(mean_yield = mean(Yield, na.rm=T) %>% scales::comma(accuracy = 0.1))
 ```
 
 ## Response
 
-\textcolor{violet}{For each example we are comparing the mean sepal len}
+The mean of yield by variety is presented in the figure and table above. A "dummy variable" regression returns mean estimates by group where the intercept is a baseline group not included in the model.
+
+## Alternative
+
+the package `emmeans` provides options to retrieve estimated marginal means
+
+```{r, include=TRUE,eval=FALSE}
+library(emmeans)
+Comparison <- emmeans::emmeans(lm_yld_vrty, ~ Variety)
+pairs(Comparison, adjust = "tukey")
+plot(pairs(Comparison,adjust = "tukey"), horizontal=F)
+```
 
 # Regression
 
 Interpret the regression results.What does the number 11.4593 mean in the results table (in front of Height)? What does R-square mean? Interpret Breusch-Pagan test (Uncomment "lmtest" installation if you don't have the package).
 
 ```{r}
-Trees <- read.csv("/data/Trees.csv", quote = "'")
+Trees <- read.csv("data/Trees.csv", quote = "'")
 attach(Trees)
 reg_model <- lm(Age ~ Height, data = Trees)
 summary(reg_model)
@@ -106,11 +134,11 @@ abline(reg_model, col = "red")
 detach(Trees)
 #install.packages("lmtest")
 library(lmtest)
-heteroskedasticity_test <- bptest(reg_model)
+heteroskedasticity_test <- lmtest::bptest(reg_model)
 heteroskedasticity_test
 ```
 
 ## Response
 
-\textcolor{violet}{For each example we are comparing the mean sepal len}
+In the regression results, the number `11.4593` is the estimated impact of a one unit increase in tree height on tree age. That is, for every one unit increase in tree height, tree age increases by `11.4593`, all else equal. The $R^2$ value of `r summary(reg_model)$r.squared %>% scales::percent(accuracy = 0.1)` means that tree height explains `r summary(reg_model)$r.squared %>% scales::percent(accuracy = 0.1)` of the variation in tree age. The result of the Breusch-Pagan Test against heteroskedasticity means that we fail to reject the null hypothesis of heteroskedasticity and the resuduals variance is constant across the values of tree height.
 
