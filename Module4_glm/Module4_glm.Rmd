@@ -1,0 +1,598 @@
+---
+title: "ECOL 592: Generalized Linear Model"
+author: "George Woolsey"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 3
+linkcolor: blue
+header-includes:
+  - \usepackage{caption}
+  - \captionsetup[figure]{labelformat=empty}
+editor_options: 
+  chunk_output_type: console
+knit: (function(inputFile, encoding){ 
+    out_dir <- '/data';
+    rmarkdown::render(inputFile, encoding = encoding, output_file=file.path(dirname(inputFile), out_dir, 'ECOL592_Wk5_GWoolsey.pdf')) 
+  })
+---
+
+```{r setup, include=F}
+# knit options
+knitr::opts_chunk$set(
+  echo = TRUE
+  , warning = FALSE
+  , message = FALSE
+  , fig.height = 5
+  , fig.width = 7
+  , eval = TRUE
+  , fig.align='center'
+)
+# load libraries
+# bread-and-butter
+library(tidyverse)
+library(lubridate)
+library(viridis)
+library(scales)
+library(latex2exp)
+# visualization
+library(cowplot)
+library(kableExtra)
+# extras
+library(psych) # for correlation matrix pairs plot
+```
+
+# Lizard Tails Example
+
+assume we want to determine the length of lizard tails and we want to determine which variables most influence tail length.
+
+row in `lizards` data is unique by site with tail length computed as a mean from all lizards captured at a site.
+
+```{r}
+lizards <- read.csv("data/lizard_data_glm.csv")
+lizards %>% dplyr::glimpse()
+```
+
+## Pre-analysis diagnostics
+
+```{r}
+library(lme4)   # for random effects
+library(corrplot) # for plotting correlations
+# hist
+hist(lizards$mean_tail_length)
+# correlation
+corr_matrix <- cor(lizards[,3:7])
+corr_matrix
+# corr plot
+corrplot::cor.mtest(corr_matrix, conf.level = 0.95)
+testRes <- cor.mtest(corr_matrix, conf.level=0.90)		#creating a correlation test
+corrplot::corrplot(corr_matrix, method = "ellipse", p.mat=testRes$p)	#plotting the correlation test
+# correlation plot with psych
+psych::pairs.panels(
+  lizards %>% 
+    dplyr::select(3:7)
+  , alpha = 0.10
+  , method = "pearson" # correlation method
+  , hist.col = "gray70"
+  , density = TRUE # show density plots
+  , ellipses = FALSE # show correlation ellipses
+  , rug = FALSE
+  , stars = TRUE
+  , main = "lizard data correlations"
+)
+```
+
+## GLM model comparison
+
+GLM model in R is accessed via `glm` with the parameters: `formula`, `family`, `link`. We can compare best parsimonious fit of model using AIC, where a lower AIC indicates better fit.
+
+```{r}
+#basic model using all variables in dataset
+# using a normal distribution for y-values
+  mod1_full_normal	<- glm(
+    data = lizards
+    , formula = 
+      mean_tail_length ~	habitat.type +
+  				year +
+  				insect_abundance +
+  				lizard_density
+    , family=gaussian(link="identity")		#normal distribution
+  	)
+# quick model results check
+  summary(mod1_full_normal)
+  hist(mod1_full_normal$residuals)
+# using a gamma distribution for strictly positive y-values
+mod2_full_gamma	<- glm(
+  data = lizards
+  , formula = 
+    mean_tail_length ~	habitat.type +
+				year +
+				insect_abundance +
+				lizard_density
+  , family=Gamma(link="identity")		#gamma distribution
+	)
+# quick model results check
+  summary(mod2_full_gamma)
+  hist(mod2_full_gamma$residuals)
+```
+
+note, that AIC value increased using the gamma distribution for lizard tail length but it would still make sense to use this model because it is more true representation of the data. 
+
+```{r}
+#lets add an interaction term (using '*' instead of '+')
+mod3_intrctn_gamma	<- glm(
+  data = lizards
+  , formula = 
+    mean_tail_length ~	habitat.type +
+				year +
+				insect_abundance * # interaction
+				lizard_density
+  , family=Gamma(link="identity")		#gamma distribution
+)
+
+summary(mod3_intrctn_gamma)
+hist(mod3_intrctn_gamma$residuals)
+
+#lets add a random effect and look at model structure again, using 'glmer'
+mod4_year_re_gamma	<- lme4::glmer(
+  data = lizards
+  , formula = 
+    mean_tail_length ~	habitat.type +
+				insect_abundance +
+				lizard_density +
+        (1|year)				#specifying a random effect
+  , family=Gamma(link="identity")		#gamma distribution
+)
+
+summary	(mod4_year_re_gamma)
+```
+
+## Plotting significant effects
+
+Plotting significant effects in an xy framework
+
+```{r}
+#plotting significant effects in an xy framework
+ggplot(
+  data = lizards
+  , mapping = aes(x = lizard_density, y = mean_tail_length)
+) +
+  geom_point(mapping = aes(fill = habitat.type), size = 4, shape = 21, alpha = 0.8) +
+  geom_smooth(method = "lm", color = "gray33") + 
+  scale_fill_viridis_d() +
+  labs(
+    x = "Lizards per hectare"
+    , y = "mean tail length (cm)"
+  ) +
+  theme_light()
+#plotting significant effects in an xy framework
+ggplot(
+  data = lizards
+  , mapping = aes(x = insect_abundance, y = mean_tail_length)
+) +
+  geom_point(mapping = aes(fill = habitat.type), size = 4, shape = 21, alpha = 0.8) +
+  geom_smooth(method = "lm", color = "gray33") + 
+  scale_fill_viridis_d() +
+  labs(
+    x = "Insect abundance"
+    , y = "mean tail length (cm)"
+  ) +
+  theme_light()
+```
+
+# NPP Assignment
+
+Use the dataset from [Davis et al. (2022)](https://esajournals.onlinelibrary.wiley.com/doi/full/10.1002/eap.2704) to generate one or more GLM models using the basic functions we discussed in class. You can try some basic diagnostics like (1) checking the distribution of response variables, (2) checking correlations between predictor variables, and (3) looking at model residuals to verify whether selected error families are appropriate. 
+
+Try to generate a 'best' model (based on lowest AIC) and a 'sensible' model based on your understanding of the variables and their relationships to one another. Do they differ? How would the interpretation of these models differ given the two different objectives (ie, a model that only seeks to minimize AIC vs a model that seeks to include appropriate ecological data)? 
+
+In addition, report the model similar to as shown in the paper, so that you get practice making these tables and creating table captions that explain what the model is. Also, please try to make at least one visualization of the final model you settle on. A word document containing tables and figures, and code file, should be submitted. 
+
+## Load data
+
+Note:
+
+* resistance = $\Delta NPP_{max}$, where a greater departure from zero is consistent with lower resistance to change.
+* resilience = $\alpha NPP$, where a steeper slope is consistent with a more rapid rate of return to pre-disturbance productivity
+
+Aspect must first be "folded" about the north-south line, rescaling 0-360° to 0-180°, such that NE = NW, E = W, etc: 
+
+$$
+\textrm{Folded aspect}^{\circ} = 180^{\circ} \, - \, \mid Aspect^{\circ} \, - \, 180^{\circ} \mid
+$$
+
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
+remove(list = ls())
+gc()
+```
+
+```{r}
+npp_dta <- read.csv("data/glm_practice_data_NPP.csv") %>% 
+  dplyr::rename_with(tolower) %>% 
+  dplyr::mutate(
+    dplyr::across(
+      tidyselect::starts_with("treatment_")
+      , function(x){
+        as.factor(x) %>% 
+          forcats::fct_recode(
+            "Control" = "C"
+            , "Shelterwood" = "H"
+            , "Salvage" = "S"
+          )
+      }
+    )
+    , folded_aspect = 180 - abs(aspect - 180)
+  )
+npp_dta %>% dplyr::glimpse()
+```
+
+## Pre-analysis checks
+
+### Treatment distributions
+
+```{r}
+color_pal <- viridisLite::viridis(n=levels(npp_dta$treatment_post) %>% length())
+npp_dta %>% 
+  dplyr::count(treatment_pre) %>% 
+  dplyr::mutate(t = treatment_pre, pct = n/sum(n), v = "Pre-Outbreak") %>% 
+  dplyr::bind_rows(
+    npp_dta %>% 
+      dplyr::count(treatment_post) %>% 
+      dplyr::mutate(t = treatment_post, pct = n/sum(n), v = "Post-Outbreak")
+  ) %>% 
+ggplot(
+  mapping = aes(x = t, fill = t, y = n)
+) +
+  geom_col(alpha = 0.9) +
+  geom_text(aes(label = n), vjust = 0) +
+  facet_grid(
+    rows = vars(forcats::fct_rev(v))
+  ) + 
+  scale_fill_manual(values = color_pal) +
+  scale_y_continuous(expand = expansion(mult = 0.1)) +
+  labs(x="") +
+  theme_light() +
+  theme(legend.position = "none")
+
+```
+
+### NPP distributions
+
+```{r}
+# dnpp
+ggplot(
+    data = npp_dta
+    , mapping = aes(x = dnpp, group = treatment_pre, fill = treatment_pre)
+  ) + 
+  geom_density(alpha = 0.9) + 
+  facet_grid(rows = vars(treatment_pre)) +
+  scale_fill_manual(values = color_pal[1:2]) +
+  theme_light() +
+  theme(legend.position = "none")
+# anpp
+ggplot(
+    data = npp_dta
+    , mapping = aes(x = anpp, group = treatment_post, fill = treatment_post)
+  ) + 
+  geom_density(alpha = 0.9) + 
+  facet_grid(rows = vars(treatment_post)) +
+  scale_fill_manual(values = color_pal) +
+  theme_light() +
+  theme(legend.position = "none")
+```
+
+### $\Delta NPP_{max}$ covariates
+
+$\Delta NPP_{max}$ is relative "resistance" to disturbance, where a greater departure of $\Delta NPP_{max}$ from zero is consistent with lower resistance to change
+
+```{r}
+psych::pairs.panels(
+  npp_dta %>% 
+    dplyr::select(
+      tph_pre
+      , ba_m2_pre
+      , qmd_cm_pre
+      , folded_aspect
+      # , slope
+      , elevation
+      , hli
+      , perc_es_ba
+      , meannpp
+      , sd.npp
+      , dnpp
+    )
+  , ellipses = F
+  , rug = F
+  , stars = T
+  , alpha = 0.1
+  , hist.col = "gray"
+)
+```
+
+### $\alpha NPP$ covariates
+
+The slope $\alpha NPP$ represents the “resilience” to disturbance; a steeper slope is consistent with a more rapid rate of return to pre-disturbance productivity
+
+```{r}
+psych::pairs.panels(
+  npp_dta %>% 
+    dplyr::select(
+      tph_post
+      , ba_m2_post
+      , qmd_cm_post
+      , folded_aspect
+      # , slope
+      , elevation
+      , hli
+      , perc_es_ba
+      , meannpp
+      , sd.npp
+      , anpp
+    )
+  , ellipses = F
+  , rug = F
+  , stars = T
+  , alpha = 0.1
+  , hist.col = "gray"
+)
+```
+
+## GLM
+
+*A generalized linear model framework was used to analyze the relative effect sizes of* 
+
+* forest structure: tree density per hectare, TPH; quadratic mean diameter, QMD
+* tree species composition: percent basal area of Engelmann spruce
+* site physiography: aspect, slope, elevation, heat load index, pre-disturbance npp
+
+on the dependent variable(s):
+
+* resistance = $\Delta NPP_{max}$, where a greater departure from zero is consistent with lower resistance to change.
+* resilience = $\alpha NPP$, where a steeper slope is consistent with a more rapid rate of return to pre-disturbance productivity
+
+
+### $\Delta NPP_{max}$ model
+
+Evaluate the full model presented in the paper. 
+
+```{r}
+m_dnpp_paper <- glm(
+  formula = dnpp ~
+    # structure
+    tph_pre +
+    qmd_cm_pre +
+    # species
+    perc_es_ba +
+    # site
+    folded_aspect +
+    slope +
+    elevation +
+    hli +
+    meannpp +
+    sd.npp
+  , data = npp_dta
+  , family=gaussian(link="identity") #normal distribution		
+)
+# summary
+summary(m_dnpp_paper)
+```
+
+Use model selection methods to select model with best AICc value
+
+```{r}
+m_dnpp_full <- glm(
+  formula = dnpp ~
+    # structure
+    tph_pre +
+    ba_m2_pre +
+    qmd_cm_pre +
+    # species
+    perc_es_ba +
+    perc_as_ba +
+    # site
+    folded_aspect +
+    slope +
+    elevation +
+    hli +
+    meannpp +
+    sd.npp
+  , data = npp_dta
+  , family=gaussian(link="identity") #normal distribution		
+)
+# model selection
+#  prevent fitting sub-models to different datasets
+oop <- options(na.action = "na.fail")
+# dredge
+dredge_dnpp <- MuMIn::dredge(m_dnpp_full)
+# check out top models by aic
+dredge_dnpp %>% 
+  dplyr::as_tibble() %>% 
+  dplyr::arrange(AICc) %>% 
+  dplyr::mutate(rank = dplyr::row_number()) %>% 
+  dplyr::relocate(rank, AICc) %>% 
+  dplyr::filter(rank <= 5) %>% 
+  dplyr::select(-c(df,logLik,delta,weight)) %>% 
+  tidyr::pivot_longer(
+    cols = -c(rank,AICc)
+    , names_to = "var"
+  ) %>% 
+  dplyr::filter(!is.na(value)) %>% 
+  dplyr::group_by(rank,AICc) %>% 
+  dplyr::summarise(independent_vars=paste(var, collapse=", ")) %>% 
+  # table
+  kableExtra::kbl(caption = "dNPP: Top 5 Models by AICc", booktabs = T, digits = 2) %>%
+    kableExtra::kable_styling(
+      latex_options = c("striped", "hold_position")
+    )
+```
+
+The table above shows the top 5 models as ranked by AICc for predicting dNPP.
+
+Summary of top model
+
+```{r}
+# check top model formula
+dredge_dnpp %>% MuMIn::get.models(subset = delta==0) %>% purrr::pluck(1)
+
+m_dnpp_top <- glm(
+  formula = dnpp ~ elevation + hli + meannpp + perc_as_ba + 
+    perc_es_ba + qmd_cm_pre + slope + 1
+  , family = gaussian(link = "identity")
+  , data = npp_dta
+)
+summary(m_dnpp_top)
+```
+
+Plotting top model xy relationships
+
+```{r}
+npp_dta %>% 
+  dplyr::select(
+    plot_id, site, treatment_pre
+    , dnpp, elevation, hli, meannpp, perc_as_ba, 
+        perc_es_ba, qmd_cm_pre, slope
+  ) %>% 
+  tidyr::pivot_longer(
+    cols = -c(plot_id, site, treatment_pre, dnpp)
+    , names_to = "vars"
+  ) %>% 
+#plotting significant effects in an xy framework
+ggplot(
+  mapping = aes(x = value, y = dnpp)
+) +
+  geom_point(mapping = aes(color = treatment_pre), size = 2, alpha = 0.8) +
+  geom_smooth(method = "lm", color = "gray33") + 
+  facet_wrap(facets = vars(vars), ncol = 4, scales = "free") +
+  scale_color_manual(values = color_pal[1:2]) +
+  labs(
+    x = ""
+    , y = "dNPP"
+    , color = "Treatment"
+  ) +
+  theme_light() +
+  theme(legend.position = "top", strip.text = element_text(size = 12, face = "bold"))
+```
+
+
+### $\alpha NPP$ model
+
+Evaluate the full model presented in the paper. 
+
+```{r}
+m_anpp_paper <- glm(
+  formula = anpp ~
+    # structure
+    tph_post +
+    qmd_cm_post +
+    # species
+    perc_es_ba +
+    # site
+    folded_aspect +
+    slope +
+    elevation +
+    hli +
+    meannpp +
+    sd.npp
+  , data = npp_dta
+  , family=gaussian(link="identity") #normal distribution		
+)
+# summary
+summary(m_anpp_paper)
+```
+
+Use model selection methods to select model with best AICc value
+
+```{r}
+m_anpp_full <- glm(
+  formula = anpp ~
+    # structure
+    tph_post +
+    ba_m2_post +
+    qmd_cm_post +
+    # species
+    perc_es_ba +
+    perc_as_ba +
+    # site
+    folded_aspect +
+    slope +
+    elevation +
+    hli +
+    meannpp +
+    sd.npp
+  , data = npp_dta
+  , family=gaussian(link="identity") #normal distribution		
+)
+# model selection
+#  prevent fitting sub-models to different datasets
+oop <- options(na.action = "na.fail")
+# dredge
+dredge_anpp <- MuMIn::dredge(m_anpp_full)
+# check out top models by aic
+dredge_anpp %>% 
+  dplyr::as_tibble() %>% 
+  dplyr::arrange(AICc) %>% 
+  dplyr::mutate(rank = dplyr::row_number()) %>% 
+  dplyr::relocate(rank, AICc) %>% 
+  dplyr::filter(rank <= 5) %>% 
+  dplyr::select(-c(df,logLik,delta,weight)) %>% 
+  tidyr::pivot_longer(
+    cols = -c(rank,AICc)
+    , names_to = "var"
+  ) %>% 
+  dplyr::filter(!is.na(value)) %>% 
+  dplyr::group_by(rank,AICc) %>% 
+  dplyr::summarise(independent_vars=paste(var, collapse=", ")) %>% 
+  # table
+  kableExtra::kbl(caption = "aNPP: Top 5 Models by AICc", booktabs = T, digits = 2) %>%
+    kableExtra::kable_styling(
+      latex_options = c("striped", "hold_position")
+    )
+```
+
+The table above shows the top 5 models as ranked by AICc for predicting aNPP.
+
+Summary of top model
+
+```{r}
+# check top model formula
+dredge_anpp %>% MuMIn::get.models(subset = delta==0) %>% purrr::pluck(1)
+
+m_anpp_top <- glm(
+  formula = anpp ~ folded_aspect + sd.npp + 1
+  , family = gaussian(link = "identity")
+  , data = npp_dta
+)
+summary(m_anpp_top)
+```
+
+Plotting top model xy relationships
+
+```{r}
+npp_dta %>% 
+  dplyr::select(
+    plot_id, site, treatment_post
+    , anpp
+    , folded_aspect, sd.npp
+  ) %>% 
+  tidyr::pivot_longer(
+    cols = -c(plot_id, site, treatment_post, anpp)
+    , names_to = "vars"
+  ) %>% 
+#plotting significant effects in an xy framework
+ggplot(
+  mapping = aes(x = value, y = anpp)
+) +
+  geom_point(mapping = aes(color = treatment_post), size = 2, alpha = 0.8) +
+  geom_smooth(method = "lm", color = "gray33") + 
+  facet_wrap(facets = vars(vars), ncol = 3, scales = "free") +
+  scale_color_manual(values = color_pal) +
+  labs(
+    x = ""
+    , y = "aNPP"
+    , color = "Treatment"
+  ) +
+  theme_light() +
+  theme(legend.position = "top", strip.text = element_text(size = 12, face = "bold"))
+```
