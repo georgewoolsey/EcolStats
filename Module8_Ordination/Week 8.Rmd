@@ -1,0 +1,188 @@
+---
+title: 'Week 8: Ordination'
+author: "Ehsan Khedive"
+date: "2023-10-02"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+rm(list = ls())
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+Dataset <- read.csv("../Module7_PCADiscriminant/Data.csv")
+Dataset$transsp <- sqrt((sin((pi/180*(Dataset$asp-45))/2))^2)
+Dataset <- subset(Dataset,select = -asp)
+Dataset$region <- as.factor(Dataset$region)
+Dataset[,3:21] <- scale(Dataset[,3:21])
+```
+
+# Plotting data
+
+```{r, fig.width=10, fig.height=10}
+library(GGally)
+library(ggplot2)
+#ggpairs(Dataset, columns = 3:21, progress = FALSE,ggplot2::aes(colour=region))
+corr_matrix <- cor(Dataset[,3:21])
+library(corrplot)
+cortestRes <- cor.mtest(corr_matrix, conf.level=0.90)
+testRes	<- cor.mtest(corr_matrix, conf.level=0.90)
+corrplot (corr_matrix, method="ellipse", p.mat=testRes$p)
+```
+
+# Exploratory factor analysis
+
+```{r}
+variables <- names(Dataset[,3:21])
+library(psych)
+library(GPArotation)
+noneres <- psych::fa(Dataset[,3:21], nfactors = 3, rotate = "none",fm = "pa")
+varimaxres <- psych::fa(Dataset[,3:21], nfactors = 3, rotate = "varimax",fm = "pa")
+equamaxres <- psych::fa(Dataset[,3:21], nfactors = 3, rotate = "equamax",fm = "pa")
+variminres <- psych::fa(Dataset[,3:21], nfactors = 3, rotate = "varimin",fm = "pa")
+obliminres <- psych::fa(Dataset[,3:21], nfactors = 3, rotate = "oblimin",fm = "pa")
+promaxres <- psych::fa(Dataset[,3:21], nfactors = 3, rotate = "promax",fm = "pa")
+clusterres <- psych::fa(Dataset[,3:21], nfactors = 3, rotate = "cluster",fm = "pa")
+varimaxres
+```
+
+## Checking output:
+
+```{r}
+varimaxres$communalities # Total Communality
+varimaxres$communality # Varibale's communalities
+varimaxres$values # Eigenvalues
+varimaxres$e.values # Raw Eigenvalues
+plot(varimaxres$e.values) # Scree plot of PCs
+plot(varimaxres$values) # Scree plot of Factors
+varimaxres$score.cor
+psych::fa.parallel(varimaxres$r, n.obs = 94) # Test for the number if meaningful factors
+```
+
+## Plotting the results
+
+```{r, fig.width=10, fig.height=10}
+psych::plot.psych(varimaxres, labels = variables)
+psych::biplot.psych(varimaxres)
+psych::fa.diagram(varimaxres) 
+```
+
+## Comparing rotations
+
+```{r, fig.width=10, fig.height=10}
+psych::biplot.psych(noneres)
+psych::biplot.psych(variminres)
+psych::biplot.psych(equamaxres)
+psych::biplot.psych(varimaxres)
+psych::biplot.psych(obliminres)
+psych::biplot.psych(promaxres)
+psych::biplot.psych(clusterres)
+```
+
+Now to use the factors that produced for model:
+
+```{r}
+# used these vectors in combination with variables as independent vars in model
+varimaxres$scores %>% dplyr::as_tibble() %>%  dplyr::glimpse()
+Dataset %>% dplyr::glimpse()
+```
+
+## Confirmatory factor analysis
+
+```{r, fig.width=80, fig.height=20}
+rm(list = ls()) # Delete all previous objects
+#install.packages("lavaan")
+#install.packages("semPlot")
+library(lavaan)
+library(semPlot)
+library(psych)
+survey <- read.csv("survey.csv")
+# gotta get that Cronbach's alpha 
+# ....and Guttman's Lambda 6
+Desirablealpha <- psych::alpha(survey[,2:11])
+Adaptablealpha <- psych::alpha(survey[,12:21])
+Practicablealpha <- psych::alpha(survey[,22:31])
+Serviceablealpha <- psych::alpha(survey[,32:41])
+
+model <- "\nDesirable =~ Desir01 + Desir02 + Desir03 + Desir04 + Desir05 + Desir06 + Desir07 + Desir08 + Desir09 + Desir10\nAdaptable =~ Adap01 + Adap02 + Adap03 + Adap04 + Adap05 + Adap06 + Adap07 + Adap08 + Adap09 + Adap10\nPracticable =~ Prac01 + Prac02 + Prac03 + Prac04 + Prac05 + Prac06 + Prac07 + Prac08 + Prac09 + Prac10\nServiceable =~ Serv01 + Serv02 + Serv03 + Serv04 + Serv05 + Serv06 + Serv07 + Serv08 + Serv09 + Serv10 "
+cfafit <- cfa(model, data = survey)
+summary(cfafit)
+fitmeasures(cfafit,c('cfi', 'tli', 'rmsea', 'rmsea.ci.upper', 'bic', 'ifi')) # Important measures are CFI, TLI, and RMSEA. ifi can be interpreted as R-sq.
+# refer to this link: http://davidakenny.net/cm/fit.htm
+semPaths(cfafit, layout = "tree", whatLabels = "est", style = "lisrel", edge.label.cex = 1)
+```
+
+## Non-metric Multidimensional Scaling
+
+```{r, fig.width=10, fig.height=10}
+rm(list = ls()) # Delete all previous objects
+#install.packages("vegan")
+library(vegan)
+nmdsdata<- read.csv(file = "Herbivore_specialisation.csv", header = TRUE) # https://environmentalcomputing.net/graphics/multivariate-vis/mds/
+nmds_result <- metaMDS(comm = nmdsdata[,5:11], distance = "bray", trace = FALSE, autotransform = FALSE, k=3)
+nmds_result$stress # Stress value below 0.2 is acceptable
+stressplot(nmds_result)
+```
+
+## Plotting NMDS results
+
+```{r}
+MDS_xy <- data.frame(nmds_result$points)
+MDS_xy$Habitat <- nmdsdata$Habitat
+MDS_xy$DayNight <- nmdsdata$DayNight
+
+library(ggplot2)
+ggplot(MDS_xy, aes(MDS1, MDS2, color = Habitat)) +
+  geom_point() +
+  theme_bw() +
+  stat_ellipse()
+
+ggplot(MDS_xy, aes(MDS1, MDS2, color = DayNight)) +
+  geom_point() +
+  theme_bw() +
+  stat_ellipse()
+nmds_result$species
+```
+
+## Our own example in nmds
+
+```{r}
+nmds_result2 <- metaMDS(Dataset[,3:21], distance = "euclidean")
+stressplot(nmds_result2)
+MDS_xy <- data.frame(nmds_result2$points)
+MDS_xy$region <- Dataset$region
+library(ggplot2)
+ggplot(MDS_xy, aes(MDS1, MDS2, color = region)) +
+  geom_point() +
+  theme_bw() +
+  stat_ellipse()
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

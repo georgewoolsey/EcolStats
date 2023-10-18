@@ -1,0 +1,98 @@
+---
+title: 'Week 7: Ordination'
+author: "Ehsan Khedive"
+date: "2023-10-02"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+#rm(list = ls())
+knitr::opts_chunk$set(echo = TRUE)
+Dataset <- read.csv("Data.csv")
+Dataset$transsp <- sqrt((sin((pi/180*(Dataset$asp-45))/2))^2)
+Dataset <- subset(Dataset,select = -asp)
+Dataset$region <- as.factor(Dataset$region)
+Dataset[,3:21] <- scale(Dataset[,3:21])
+```
+
+# Plotting data
+
+```{r, fig.width=10, fig.height=10}
+library(GGally)
+library(ggplot2)
+#ggpairs(Dataset, columns = 3:21, progress = FALSE,ggplot2::aes(colour=region))
+corr_matrix <- cor(Dataset[,3:21])
+library(corrplot)
+testRes <- cor.mtest(corr_matrix, conf.level=0.90)
+corrplot (corr_matrix, method="ellipse", p.mat=testRes$p)
+```
+
+If there is not significant correlation in a variable then potentially better to drop that variable from the PCA analysis
+
+# PCA and Factor analysis
+
+*Eigenvalues*, that is, the variance explained by each principal component. These are constrained to decrease monotonically from the first principal component to the last. Eigenvalues are commonly plotted on a *scree plot* to show the decreasing rate at which variance is explained by additional principal components. 
+
+These values are called the *loadings*, which describe how much each variable contributes to a particular principal component. Large loadings (positive or negative) indicate that a particular variable strongly relates to a particular principal component. The sign of a loading indicates whether a variable and a principal component are positively or negatively correlated.
+
+The positions of each observation in this new coordinate system of principal components are called *scores*. These are calculated as linear combinations of the original variables and the weights aij. 
+
+```{r, fig.width=10, fig.height=10}
+pcares <- princomp(Dataset[,3:21], cor = TRUE)
+# # These values are called the loadings, which describe how much each variable contributes to a particular principal component. 
+# Large loadings (positive or negative) indicate that a particular variable strongly relates to a particular principal component. 
+# The sign of a loading indicates whether a variable and a principal component are positively or negatively correlated.
+pcares$loadings
+# # The positions of each observation in this new coordinate system of principal components are called scores. 
+# These are calculated as linear combinations of the original variables and the weights aij.
+pcares$scores
+library(factoextra)
+fviz_eig(pcares)
+fviz_pca_ind(pcares,
+             col.ind = "cos2", # Color by the quality of representation
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE     # Avoid text overlapping
+             )
+fviz_pca_var(pcares,
+             col.var = "contrib", # Color by contributions to the PC
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE     # Avoid text overlapping
+             )
+# library(devtools)
+# install_github("vqv/ggbiplot")
+library(ggbiplot)
+ggbiplot(pcares,
+              obs.scale = 1,
+              var.scale = 1,
+              groups = Dataset$region,
+              ellipse = TRUE,
+              circle = TRUE,
+              ellipse.prob = 0.68) + theme_bw() + scale_color_discrete(name = '') + theme(legend.direction = 'horizontal',
+               legend.position = 'top')
+```
+
+# Discriminant Analysis
+
+```{r,fig.width=10, fig.height=6}
+library(MASS)
+lda_model <- lda(region ~ tph+h+cov+crown+branch+shanon+regen+elev+slope+sand1+clay1+lim1+C1+K1+P1+N1+EC1+pH1+transsp, data = Dataset)
+
+lda_model$means
+lda_model$scaling
+
+ggbiplot(lda_model,
+              obs.scale = 1,
+              var.scale = 1,
+              groups = Dataset$region,
+              ellipse = TRUE,
+              circle = TRUE,
+              ellipse.prob = 0.68) + theme_bw() + scale_color_discrete(name = '') + theme(legend.direction = 'horizontal',
+               legend.position = 'top')+ xlab("Discriminant 1") + ylab("Discriminant 2")
+
+
+predicted <- predict(lda_model, newdata = Dataset)$class
+confusion_matrix <- table(predicted, Dataset$region)
+confusion_matrix
+
+
+```
