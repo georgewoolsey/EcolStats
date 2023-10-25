@@ -1,0 +1,207 @@
+---
+title: "ECOL 592: NMDS"
+author: "George Woolsey"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 3
+linkcolor: blue
+header-includes:
+  - \usepackage{caption}
+  - \captionsetup[figure]{labelformat=empty}
+editor_options: 
+  chunk_output_type: console
+knit: (function(inputFile, encoding){ 
+    out_dir <- '/data';
+    rmarkdown::render(inputFile, encoding = encoding, output_file=file.path(dirname(inputFile), out_dir, 'ECOL592_NMDS_GWoolsey.pdf')) 
+  })
+---
+
+```{r setup, include=F}
+# knit options
+knitr::opts_chunk$set(
+  echo = TRUE
+  , warning = FALSE
+  , message = FALSE
+  , fig.height = 5
+  , fig.width = 7
+  , eval = TRUE
+  , fig.align='center'
+)
+# load libraries
+# bread-and-butter
+library(tidyverse)
+library(lubridate)
+library(viridis)
+library(scales)
+library(latex2exp)
+# visualization
+library(cowplot)
+library(kableExtra)
+# extras
+library(vegan) # for NMDS
+library(psych) # for correlation plot
+```
+
+# *Bombus* Example
+
+Using data on bee (*Bombus*) biodiversity in post- bark beetle outbreak stands to explore site differences. Results were visualized using non-metric multidimensional scaling (NMDS), produced with the `metaMDS` function in package `vegan`.
+
+Data and analysis is from [Davis et al. (2020)](https://scholar.google.com/scholar?cluster=3964994814381250489&oi=gsb&hl=en&as_sdt=0,6)
+
+# Load Data
+
+```{r}
+data_bombus <- read.csv("DAVIS_Bombus_dataset.csv") %>% 
+  # have to filter out observations with missing data
+  dplyr::filter(stats::complete.cases(.)) %>% 
+  # remove rows with 0's in all columns
+  dplyr::mutate(r_sum = rowSums(
+      dplyr::across(
+        tidyselect::where(is.numeric)
+        & -c(year, lat, long, SUM)
+      )
+    )
+  ) %>% 
+  dplyr::filter(r_sum>0) %>% 
+  dplyr::select(-c(r_sum))
+data_bombus %>% dplyr::glimpse()
+#remove non-numeric columns to pass to vegan::metaMDS
+data_bombus_int <- data_bombus %>% 
+  dplyr::select(
+    tidyselect::where(is.numeric)
+    & -c(year, lat, long, SUM)
+  )
+data_bombus_int %>% dplyr::glimpse()
+```
+
+## Data exploration
+
+```{r}
+# correlation plot with psych
+psych::pairs.panels(
+  data_bombus_int %>% 
+    dplyr::select(
+      sample(
+        x = 1:ncol(data_bombus_int)
+        , size = min(8,ncol(data_bombus_int))
+      )
+    )
+  , alpha = 0.10
+  , method = "pearson" # correlation method
+  , hist.col = "gray70"
+  , density = TRUE # show density plots
+  , ellipses = FALSE # show correlation ellipses
+  , rug = FALSE
+  , stars = TRUE
+  , main = "sample bombas data correlations"
+)
+```
+
+# NMDS
+
+```{r}
+#making the NMDS object
+ordination <- vegan::metaMDS(
+  data_bombus_int %>% as.matrix()
+  , trymax="1000"
+)
+ordination
+```
+
+The NMDS results have a stress value of **`r scales::comma(ordination$stress, accuracy=0.001)`** which indicates that there are not significant differences in the clusters.
+
+## Diagnostic plot
+
+```{r}
+#diagnostic plot
+vegan::stressplot(ordination)
+```
+
+## Testing significance
+
+```{r}
+#testing for significance
+#PERMANOVA
+vegan::adonis2((data_bombus_int %>% as.matrix())~data_bombus$Study)	
+```
+
+## Plotting results
+
+```{r}
+# combine NMDS results with original data
+data_bombus <- dplyr::bind_cols(
+  ordination$points
+  , data_bombus
+)
+# plot with color by site
+plt_site <-
+  ggplot(
+    data = data_bombus
+    , mapping = aes(x = MDS1, y = MDS2, fill = site)
+  ) +
+  geom_point(shape=21, alpha = 0.7, size = 4, color = "gray88") +
+  scale_fill_viridis_d() +
+  labs(
+    title = "NMDS results colored by `site`"
+  ) +
+  theme_light() +
+  theme(
+    legend.position = "none"
+  )
+plt_site
+# plot with color by study
+plt_study <-
+  ggplot(
+    data = data_bombus
+    , mapping = aes(x = MDS1, y = MDS2, fill = Study)
+  ) +
+  geom_point(shape=21, alpha = 0.7, size = 4, color = "gray88") +
+  scale_fill_viridis_d(option = "turbo") +
+  labs(
+    title = "NMDS results colored by `Study`"
+  ) +
+  theme_light() +
+  theme(
+    legend.position = "top"
+  )
+plt_study
+# plot in grid
+plt_study +
+  facet_wrap(
+    facets = dplyr::vars(Study)
+    , ncol = 4
+    , labeller = label_wrap_gen(width = 20, multi_line = TRUE)
+  ) + 
+  theme(
+    legend.position = "none"
+  )
+# plot with color by year
+plt_year <-
+  ggplot(
+    data = data_bombus
+    , mapping = aes(x = MDS1, y = MDS2, fill = as.factor(year))
+  ) +
+  geom_point(shape=21, alpha = 0.7, size = 4, color = "gray88") +
+  scale_fill_viridis_d(option = "cividis") +
+  labs(
+    title = "NMDS results colored by `year`"
+  ) +
+  theme_light() +
+  theme(
+    legend.position = "top"
+  )
+plt_year
+# plot in grid
+plt_year +
+  facet_wrap(
+    facets = dplyr::vars(as.factor(year))
+    , ncol = 4
+    , labeller = label_wrap_gen(width = 20, multi_line = TRUE)
+  ) +
+  theme(
+    legend.position = "none"
+  )
+
+```
