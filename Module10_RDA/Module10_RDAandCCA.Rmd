@@ -1,0 +1,282 @@
+---
+title: "ECOL 592: RDA and CCA"
+author: "George Woolsey"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 3
+linkcolor: blue
+header-includes:
+  - \usepackage{caption}
+  - \captionsetup[figure]{labelformat=empty}
+editor_options: 
+  chunk_output_type: console
+knit: (function(inputFile, encoding){ 
+    out_dir <- '/';
+    rmarkdown::render(inputFile, encoding = encoding, output_file=file.path(dirname(inputFile), out_dir, 'ECOL592_RDAandCCA_GWoolsey.pdf')) 
+  })
+---
+
+```{r setup, include=F}
+# knit options
+knitr::opts_chunk$set(
+  echo = TRUE
+  , warning = FALSE
+  , message = FALSE
+  , fig.height = 5
+  , fig.width = 7
+  , eval = TRUE
+  , fig.align='center'
+)
+# load libraries
+# bread-and-butter
+library(tidyverse)
+library(lubridate)
+library(viridis)
+library(scales)
+library(latex2exp)
+# visualization
+library(cowplot)
+library(kableExtra)
+# extras
+library(vegan) # for NMDS
+library(vegan3d) # RDA
+library(psych) # for correlation plot
+library(factoextra) # RDA viz
+```
+
+# Canonical correspondence analysis (CCA)
+
+## Load Data
+
+```{r}
+spider <- read.csv("Makarenkov2002.csv")
+# species count data
+spider[,2:13] %>% dplyr::glimpse()
+lnsp <- log(spider[,2:13]+1)
+# environmental data
+spider[,c(14:17)] %>% dplyr::glimpse()
+env <- spider[,c(14:17)]
+colnames(env)[1] <- "Water"
+# scale environmental data
+env <- as.data.frame(scale(env))
+# create polynomials of environmental data
+env$Water2 <- env$Water^2
+env$Reflection2 <- env$Reflection^2
+env$Wateref <- env$Water*env$Reflection
+# explore some species
+{plot(env$Water,lnsp$Al.fabrilis)
+lines(lowess(env$Water,lnsp$Al.fabrilis))}
+{plot(env$Reflection,lnsp$Pa.monticola)
+lines(lowess(env$Reflection,lnsp$Pa.monticola))}
+```
+
+## PCA
+
+`princomp` performs a principal components analysis 
+
+```{r,fig.width=8,fig.height=8}
+# princomp performs a principal components analysis 
+#   on the given numeric data matrix and returns the 
+#   results as an object of class princomp.
+pcares <- stats::princomp(lnsp, cor = TRUE)
+pcares$loadings %>% str()
+pcares$scores %>% str()
+# Extract and visualize the eigenvalues/variances of dimensions
+factoextra::fviz_eig(pcares)
+# Biplot of Multivariate Data
+stats::biplot(pcares)
+# Visualize Principal Component Analysis
+# Color by the quality of representation
+factoextra::fviz_pca_ind(pcares,
+             col.ind = "cos2", # Color by the quality of representation
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE     # Avoid text overlapping
+             )
+# Visualize Principal Component Analysis
+# Color by contributions to the PC
+factoextra::fviz_pca_var(pcares,
+             col.var = "contrib", # Color by contributions to the PC
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE     # Avoid text overlapping
+             )
+```
+
+
+## ASSIGNMENT
+
+### Linear Redundancy analysis 
+
+```{r}
+# rda performs redundancy analysis
+rdamodel <- vegan::rda(lnsp~., env[,1:4])
+# do forward, backward or stepwise model selection using permutation tests
+finalrda<- vegan::ordistep(rdamodel, scope=formula(rdamodel))
+# look at model output
+summary(finalrda)
+# coefficients
+coef(finalrda) %>% 
+  kableExtra::kbl(caption = "CCA model coefficients", digits = 3) %>% 
+  kableExtra::kable_paper()
+# r-squared
+vegan::RsquareAdj(finalrda)$r.squared
+vegan::RsquareAdj(finalrda)$adj.r.squared
+```
+
+*analyse linear dependencies among constraints and conditions*
+
+```{r, results='hold'}
+# analyse linear dependencies among constraints and conditions
+vegan::vif.cca(finalrda) %>% 
+  kableExtra::kbl(caption = "CCA model VIF", digits = 3) %>% 
+  kableExtra::kable_paper()
+```
+
+\textcolor{violet}{Results above present the variance inflation factors (VIF) for each constraint or contrast in factor constraints. A common rule is that values over 10 indicate redundant constraints. The value below 4 in these results indicates no significant relationship between the variables.}
+
+*assess the goodness of fit for individual sites or species*
+
+```{r, results='hold'}
+# assess the goodness of fit for individual sites or species.
+# ?vegan::goodness
+vegan::goodness(finalrda) %>% 
+  kableExtra::kbl(caption = "CCA model goodness of fit", digits = 3) %>% 
+  kableExtra::kable_paper()
+```
+
+\textcolor{violet}{The results above give cumulative proportion of inertia accounted by species up to chosen axes. The proportions can be assessed either by species or by sites. In these results, any species that have a coefficient above 0.6 indicates that the variation in species can be explained by the environmental variables.}
+
+### 1.1. Anova analysis (Permutation test)
+
+```{r}
+# implement ANOVA-like permutation tests for the joint effect of constraints in cca, rda
+vegan::anova.cca(finalrda)
+vegan::anova.cca(finalrda, by="terms")
+vegan::anova.cca(finalrda, by="axis")
+```
+
+\textcolor{violet}{The results above implement ANOVA-like permutation tests for the joint effect of constraints in CCA. The overall model tested shows significant differences in species abundances across the environmental varibles tested. All of the environmental variables except `Corynephorus` had impacts on species abundances which were significantly different from zero. Lastly, only the first two principal components (RDA1 and RDA2) had statistically significant explanatory power for describing differences in species abundances. Environmental variables and principal components that are not statistically significant can be remove from the model.}
+
+### 1.2. Diagnostics tests
+
+```{r, results='hold'}
+# coefficients
+coef(finalrda) %>% 
+  kableExtra::kbl(caption = "CCA model coefficients", digits = 3) %>% 
+  kableExtra::kable_paper()
+# r-squared
+vegan::RsquareAdj(finalrda)$r.squared
+vegan::RsquareAdj(finalrda)$adj.r.squared
+```
+
+*analyse linear dependencies among constraints and conditions*
+
+```{r, results='hold'}
+# analyse linear dependencies among constraints and conditions
+vegan::vif.cca(finalrda) %>% 
+  kableExtra::kbl(caption = "CCA model VIF", digits = 3) %>% 
+  kableExtra::kable_paper()
+```
+
+\textcolor{violet}{Results above present the variance inflation factors (VIF) for each constraint or contrast in factor constraints. A common rule is that values over 10 indicate redundant constraints. The value below 4 in these results indicates no significant relationship between the variables.}
+
+*assess the goodness of fit for individual sites or species*
+
+```{r, results='hold'}
+# assess the goodness of fit for individual sites or species.
+# ?vegan::goodness
+vegan::goodness(finalrda) %>% 
+  kableExtra::kbl(caption = "CCA model goodness of fit", digits = 3) %>% 
+  kableExtra::kable_paper()
+```
+
+\textcolor{violet}{The results above give cumulative proportion of inertia accounted by species up to chosen axes. The proportions can be assessed either by species or by sites. In these results, any species that have a coefficient above 0.6 indicates that the variation in species can be explained by the environmental variables.}
+
+
+### 1.3. Generating plot
+
+```{r,fig.width=8,fig.height=8}
+plot(finalrda, 
+scaling = 2, 
+display = c("sp","lc", "cn"), 
+main = "Triplot RDA Species ~ Environment - scaling 1 - lc scores"
+)
+```
+
+\textcolor{violet}{Interpretation of these plots should be based on the goodness test.}
+
+### 1.4. Quadratic model
+
+```{r}
+rdamodel2 <- vegan::rda(lnsp~., env)
+#model selection
+finalrda2<- vegan::ordistep(rdamodel2, scope=formula(rdamodel2))
+# look at model output
+summary(finalrda2)
+```
+
+*implement ANOVA-like permutation tests for the joint effect of constraints in cca, rda*
+
+```{r}
+# implement ANOVA-like permutation tests for the joint effect of constraints in cca, rda
+vegan::anova.cca(finalrda2)
+vegan::anova.cca(finalrda2, by="terms")
+vegan::anova.cca(finalrda2, by="axis")
+```
+
+\textcolor{violet}{The results above implement ANOVA-like permutation tests for the joint effect of constraints in CCA. The overall model tested shows significant differences in species abundances across the environmental varibles tested. All of the environmental variables except `Wateref` had impacts on species abundances which were significantly different from zero. Lastly, only the first two principal components (RDA1 and RDA2) had statistically significant explanatory power for describing differences in species abundances (alpha = 0.05 level). Environmental variables and principal components that are not statistically significant can be remove from the model.}
+
+*model coefficients*
+
+```{r, results='hold'}
+# coefficients
+coef(finalrda2) %>% 
+  kableExtra::kbl(caption = "CCA quadratic model coefficients", digits = 3) %>% 
+  kableExtra::kable_paper()
+# r-squared
+RsquareAdj(finalrda2)$r.squared
+RsquareAdj(finalrda2)$adj.r.squared
+```
+
+
+*analyse linear dependencies among constraints and conditions*
+
+```{r, results='hold'}
+# analyse linear dependencies among constraints and conditions
+vegan::vif.cca(finalrda2) %>% 
+  kableExtra::kbl(caption = "CCA quadratic model VIF", digits = 3) %>% 
+  kableExtra::kable_paper()
+```
+
+\textcolor{violet}{Results above present the variance inflation factors (VIF) for each constraint or contrast in factor constraints. A common rule is that values over 10 indicate redundant constraints. The values below 4 in these results indicate no significant relationship between the variables. Values above 4 were found for `Water`, `Reflection`, and `Reflection2`.}
+
+*assess the goodness of fit for individual sites or species*
+
+```{r, results='hold'}
+# assess the goodness of fit for individual sites or species.
+# ?vegan::goodness
+vegan::goodness(finalrda2,choices = 1:2) %>% 
+  kableExtra::kbl(caption = "CCA quadratic model goodness of fit", digits = 3) %>% 
+  kableExtra::kable_paper()
+```
+
+\textcolor{violet}{The results above give cumulative proportion of inertia accounted by species up to chosen axes. The proportions can be assessed either by species or by sites. In these results, any species that have a coefficient above 0.6 indicates that the variation in species can be explained by the environmental variables.}
+
+```{r,fig.width=8,fig.height=8}
+plot(finalrda2, 
+scaling = 1, 
+display = c("sp", "cn"), 
+main = "Triplot RDA Species ~ Environment - scaling 1 - lc scores"
+)
+```
+
+\textcolor{violet}{Interpretation of these plots should be based on the goodness test.}
+
+## Reference
+
+Borcard, D., Gillet, F., & Legendre, P. (2011). Numerical ecology with R (Vol. 2, p. 688). New York: springer.
+
+Makarenkov, V., & Legendre, P. (2002). Nonlinear redundancy analysis and canonical correspondence analysis based on polynomial regression. Ecology, 83(4), 1146-1161.
+
+Leaw, Chui Pin; Lim, Po Teen; Lee, Li Keat (2020). R script and datasets - CCA. figshare. Dataset. https://doi.org/10.6084/m9.figshare.12356519.v3

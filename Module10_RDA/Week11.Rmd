@@ -1,0 +1,146 @@
+---
+title: "Canonical analysis"
+author: "Ehsan Khedive"
+date: "2023-10-27"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+rm(list = ls())
+library(tidyverse)
+```
+
+## Canonical correspondence analysis
+
+```{r}
+library(vegan)
+library(vegan3d)
+Spider <- read.csv("Makarenkov2002.csv")
+Spider %>% dplyr::glimpse()
+```
+
+
+```{r}
+lnsp <- log(Spider[,2:13]+1) # log of 0 is inf.
+env <- Spider[,c(14:17)]
+colnames(env)[1] <- "Water"
+env <- as.data.frame(scale(env))
+env$Water2 <- env$Water^2
+env$Reflection2 <- env$Reflection^2
+env$Wateref <- env$Water*env$Reflection
+{plot(env$Water,lnsp$Al.fabrilis)
+lines(lowess(env$Water,lnsp$Al.fabrilis))}
+{plot(env$Reflection,lnsp[,8])
+lines(lowess(env$Reflection,lnsp[,8]))}
+```
+
+```{r,fig.width=8,fig.height=8}
+pcares <- princomp(lnsp, cor = TRUE)
+pcares$loadings
+pcares$scores
+library(factoextra)
+fviz_eig(pcares)
+biplot(pcares)
+fviz_pca_ind(pcares,
+             col.ind = "cos2", # Color by the quality of representation
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE     # Avoid text overlapping
+             )
+fviz_pca_var(pcares,
+             col.var = "contrib", # Color by contributions to the PC
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE     # Avoid text overlapping
+             )
+```
+
+# 1. Linear Canonical correspondence analysis
+
+```{r}
+ccamodel <- cca(lnsp~., env[,1:4])
+finalcca <- ordistep(ccamodel, scope=formula(ccamodel))
+vif.cca(finalcca)
+# vif below 4 indicates no significant relationship between the variables
+summary(finalcca)
+```
+
+## 1.1. Anova analysis (Permutation test)
+
+```{r}
+anova.cca(finalcca)
+anova.cca(finalcca, by="terms")
+# can remove the variable that is not significant
+anova.cca(finalcca, by="axis")
+```
+
+## 1.2. Diagnostics tests
+
+```{r}
+coef(finalcca)
+RsquareAdj(finalcca)$r.squared
+RsquareAdj(finalcca)$adj.r.squared
+vif.cca(finalcca)
+goodness(finalcca,choices = 1:2)
+# any species that have coefficient above .6 indicates that the 
+# variation in species can be explained by the environmental variables
+```
+
+## 1.3. Generating plots
+
+```{r,fig.width=8,fig.height=8}
+plot(finalcca, 
+scaling = 1, 
+display = c("sp", "cn","wa"), 
+main = "Triplot CCA Species ~ Environment - scaling 1 - lc scores"
+)
+# interpretation of plots should be based on the goodness test
+```
+
+```{r,fig.width=8,fig.height=8}
+plot(finalcca, 
+scaling = 2, 
+display = c("sp", "lc", "cn"), 
+main = "Triplot CCA Species ~ Environment - scaling 2 - lc scores"
+)
+```
+
+## 1.4. Quadratic model
+
+```{r}
+ccamodel2 <- cca(lnsp~., env)
+finalcca2<- ordistep(ccamodel2, scope=formula(ccamodel2))
+summary(finalcca2)
+anova.cca(finalcca2)
+anova.cca(finalcca2, by="terms")
+anova.cca(finalcca2, by="axis")
+coef(finalcca2)
+RsquareAdj(finalcca2)$r.squared
+RsquareAdj(finalcca2)$adj.r.squared
+vif.cca(finalcca2)
+goodness(finalcca)
+```
+
+```{r,fig.width=8,fig.height=8}
+plot(finalcca2, 
+scaling = 1, 
+display = c("sp", "lc", "cn"), 
+main = "Triplot CCA Species ~ Environment - scaling 1 - lc scores"
+)
+```
+
+```{r,fig.width=8,fig.height=8}
+plot(finalcca2, 
+scaling = 2, 
+display = c("sp", "lc", "cn"), 
+main = "Triplot CCA Species ~ Environment - scaling 2 - lc scores"
+)
+```
+
+
+Reference:
+
+Borcard, D., Gillet, F., & Legendre, P. (2011). Numerical ecology with R (Vol. 2, p. 688). New York: springer.
+
+Makarenkov, V., & Legendre, P. (2002). Nonlinear redundancy analysis and canonical correspondence analysis based on polynomial regression. Ecology, 83(4), 1146-1161.
+
+Leaw, Chui Pin; Lim, Po Teen; Lee, Li Keat (2020). R script and datasets - CCA. figshare. Dataset. https://doi.org/10.6084/m9.figshare.12356519.v3
