@@ -1,0 +1,201 @@
+---
+title: "ECOL 592: Spatial Correlation"
+author: "George Woolsey"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 3
+linkcolor: blue
+header-includes:
+  - \usepackage{caption}
+  - \captionsetup[figure]{labelformat=empty}
+editor_options: 
+  chunk_output_type: console
+knit: (function(inputFile, encoding){ 
+    out_dir <- '/';
+    rmarkdown::render(inputFile, encoding = encoding, output_file=file.path(dirname(inputFile), out_dir, 'ECOL592_SpatialCorrelation_GWoolsey.pdf')) 
+  })
+---
+
+```{r setup, include=F}
+# knit options
+knitr::opts_chunk$set(
+  echo = TRUE
+  , warning = FALSE
+  , message = FALSE
+  , fig.height = 5
+  , fig.width = 7
+  , eval = TRUE
+  , fig.align='center'
+)
+# load libraries
+# bread-and-butter
+library(tidyverse)
+library(lubridate)
+library(viridis)
+library(scales)
+library(latex2exp)
+# visualization
+library(cowplot)
+library(kableExtra)
+# extras
+library(ncf) # Spatial Covariance Functions
+```
+
+# Assignment
+
+For homework practice, please use the Bombus dataset (provided) to:
+
+1) analyze spatial autocorrelation in abundances of one of the species (other than the one we used as an example) from one or more studies, 
+2) produce a spline correlogram with a confidence interval, and 
+3) interpret the correlogram to make conclusions about sample independence. How would you recommend dealing with non-spatially independent samples post-hoc? 
+
+# Responses
+
+## Load Data
+
+```{r, results='hide'}
+bombus <- read.csv("DAVIS_Bombus_dataset_reduced.csv", head=T) %>% 
+  dplyr::rename_with(tolower)
+bombus %>% dplyr::glimpse()
+# which study was used for in-class presentation?
+bombus[244:280,] %>% 
+  dplyr::count(study)
+
+```
+
+## Question 1 
+analyze spatial autocorrelation in abundances of one of the species (other than the one we used as an example) from one or more studies
+
+```{r, results='hide'}
+# other studies
+bombus %>% 
+  dplyr::count(study) %>% 
+  ggplot(mapping = aes(y = study, x = n, fill = n)) +
+    geom_col(width = 0.7) +
+    scale_fill_viridis_c(option = "mako", direction = -1) +
+    theme_light() +
+    theme(legend.position = "none")
+# species
+bombus %>% 
+  dplyr::select(
+    -c(
+      plot_id
+      , year
+      , site
+      , lat
+      , long
+      , col_vec
+    )
+  ) %>% 
+  tidyr::pivot_longer(
+    cols = -c(study)
+    , names_to = "species"
+    , values_to = "count"
+  ) %>% 
+  dplyr::group_by(study, species) %>% 
+  dplyr::summarize(n = sum(count)) %>% 
+  ggplot(mapping = aes(y = species, x = n, fill = n)) +
+    geom_col(width = 0.7) +
+    facet_wrap(facets = vars(study)) +
+    scale_fill_viridis_c(option = "mako", direction = -1) +
+    scale_y_discrete(limits = rev) +
+    theme_light() +
+    theme(legend.position = "none")
+
+```
+
+\textcolor{violet}{Based on this plot of species observations by study, a correlogram will be produced only for species with observations in all studies.}
+
+## Question 2 
+produce a spline correlogram with a confidence interval
+
+```{r}
+# study list
+study_list <- bombus$study %>% unique() %>% sort()
+# list of species with obs from all studies
+# species
+species_list <- bombus %>% 
+  dplyr::select(
+    -c(
+      plot_id
+      , year
+      , site
+      , lat
+      , long
+      , col_vec
+    )
+  ) %>% 
+  tidyr::pivot_longer(
+    cols = -c(study)
+    , names_to = "species"
+    , values_to = "count"
+  ) %>% 
+  dplyr::group_by(study, species) %>% 
+  dplyr::summarize(n = sum(count)) %>%
+  dplyr::filter(n>0) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::count(species) %>% 
+  dplyr::filter(n == length(unique(bombus$study))) %>% 
+  dplyr::pull(species)
+# function to plot correlogram
+plt_fn <- function(study_num = 1, species_num = 1) {
+  # filter data
+  dta_temp <- bombus %>% 
+    dplyr::filter(study == study_list[study_num])
+  # spline.correlog
+  correlog_temp <- ncf::spline.correlog(
+    x=dta_temp$long
+    , y=dta_temp$lat
+    , z=dta_temp[[species_list[species_num]]]
+    , latlon=T
+    , resamp=200
+    , quiet = T
+  )
+  # set up data frame and plot
+  plt <- data.frame(
+      x = correlog_temp$real$predicted$x %>% c()
+      , y = correlog_temp$real$predicted$y %>% c()
+      , l_ci = correlog_temp$boot$boot.summary$predicted$y["0.025",] %>% c()
+      , u_ci = correlog_temp$boot$boot.summary$predicted$y["0.975",] %>% c()
+    ) %>% 
+    dplyr::filter(x < correlog_temp$max.distance) %>% 
+    ggplot(
+      mapping = aes(x = x, y = y)
+    ) + 
+    geom_hline(yintercept = 0, color = "black") +
+    geom_ribbon(aes(ymin = l_ci, ymax = u_ci), fill = "grey70", alpha = 0.8) +
+    geom_line(color = "navy") + 
+    labs(
+      x="distance"
+      , y = "correlation"
+      , title = paste0("study: ",study_list[study_num])
+      , subtitle = paste0("species: ",species_list[species_num])
+    ) +
+    theme_light() + 
+    theme(
+      plot.title = element_text(size = 9)
+      , plot.subtitle = element_text(size = 8)
+      , axis.title = element_text(size = 6)
+      , axis.text = element_text(size = 6)
+    )
+  # return
+  return(plt)
+}
+# plt_list <- c("Exp","Sph","Gau","Exc","Mat","Log","Pow","Spl") %>% 
+plt_list <- 1:length(study_list) %>% 
+  purrr::map(plt_fn)
+# combine
+cowplot::plot_grid(
+  plotlist = plt_list 
+  , ncol = 3
+)
+```
+
+\textcolor{violet}{The figure above shows a spline correlogram for all studies with observations of the species: }`r species_list[species_num]`. 
+
+## Question 3
+interpret the correlogram to make conclusions about sample independence. How would you recommend dealing with non-spatially independent samples post-hoc? 
+
+\textcolor{violet}{Interpretation of these plots should be based on the goodness test.}

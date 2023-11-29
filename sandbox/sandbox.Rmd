@@ -22,6 +22,76 @@ library(latex2exp)
 
 
 ```{r}
-latitude, longitude, altitude(m), heading(deg), curvesize(m), rotationdir, gimbalmode, gimbalpitchangle, actiontype1, actionparam1, actiontype2, actionparam2, actiontype3, actionparam3, actiontype4, actionparam4, actiontype5, actionparam5, actiontype6, actionparam6, actiontype7, actionparam7, actiontype8, actionparam8, actiontype9, actionparam9, actiontype10, actionparam10, actiontype11, actionparam11, actiontype12, actionparam12, actiontype13, actionparam13, actiontype14, actionparam14, actiontype15, actionparam15, altitudemode, speed(m/s), poi_latitude, poi_longitude, poi_altitude(m), poi_altitudemode, photo_timeinterval, photo_distinterval
+ghg <- readr::read_csv("ghg-emissions-by-sector.csv", name_repair = make.names) %>% 
+  dplyr::rename_all(tolower) %>% 
+  dplyr::filter(tolower(entity) == "norway") %>% 
+  dplyr::arrange(entity, year) %>% 
+  dplyr::group_by(entity) %>% 
+  tidyr::pivot_longer(
+    cols = starts_with("greenhouse.gas.emissions.from.")
+    , names_to = "source"
+    , names_prefix = "greenhouse.gas.emissions.from."
+    , values_to = "co2e_tonnes"
+    , values_drop_na = F
+  ) %>% 
+  dplyr::mutate(
+    source = stringr::str_replace_all(source, "\\.", " ")
+    , is_last_first = (year == max(year)) | (year == min(year))
+    , is_last = (year == max(year))
+  )
+# plot
+ggplot(
+    data = ghg %>% 
+      dplyr::filter(
+        source %in% c("agriculture", "land use change and forestry")
+        & is_last_first
+      )
+    , mapping = aes(x = year, y = co2e_tonnes, color = source)
+  ) +
+  geom_hline(yintercept = 0, color = "gray22") +
+  geom_line(
+    data = ghg %>% 
+      dplyr::filter(source %in% c("agriculture", "land use change and forestry"))
+    , lwd = 1.4
+  ) +
+  geom_point() +
+  geom_text(
+    mapping = aes(label = scales::number(co2e_tonnes, suffix = "M t", scale = 1e-6, accuracy = 0.1))
+    , color = "black"
+    , vjust = -0.5
+  ) +
+  geom_text(
+    data = ghg %>% 
+      dplyr::filter(
+        source %in% c("agriculture", "land use change and forestry")
+        & is_last
+      )
+    , mapping = aes(label = stringr::str_wrap(source, 10), x = year, y = co2e_tonnes)
+    , color = "black"
+    , size = 3
+    , vjust = 1.1
+  ) +
+  scale_color_viridis_d(option = "viridis") +
+  scale_y_continuous(labels = scales::label_number(suffix = "M t", scale = 1e-6, accuracy = 1)) +
+  scale_x_continuous(breaks = scales::extended_breaks(n = 8), expand = expansion(mult = c(0.05,0.1))) +
+  labs(
+    x = ""
+    , y = "tonnes of carbon dioxide-equivalents"
+  ) +
+  theme_light() +
+  theme(
+    legend.position = "none"
+    , axis.title = element_text(size = 9)
+    , axis.text = element_text(size = 10)
+  )
+ggplot2::ggsave(
+    filename = paste0("C:/Users/georg/Downloads/norway_lulucf_ag.png")
+    , plot = ggplot2::last_plot()
+    , width = 11
+    , height = 8
+    , units = "in"
+    , dpi = "print"
+    , bg = "white"
+  )
 ```
 
